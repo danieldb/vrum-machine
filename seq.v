@@ -2,17 +2,20 @@ import gg
 import gx
 import time
 import miniaudio as ma
+import math
 
 struct DrumSound {
 	kick int = 0
 	snare int = 1
 	hihat int = 2
 }
-
 struct AppState {
 	mut:
+		steps_in_seq int = 32
+		seqs int = 2 // pronounced seeks
+
 		gg &gg.Context = 0
-		board [][]bool = [][]bool{len: 3, cap: 3, init: []bool{len: 16, cap: 16, init: false}}
+		board [][]bool
 		mx f32
 		my f32
 		mdown bool
@@ -38,7 +41,7 @@ fn main() {
 	mut	state := &AppState{}
 	state.gg = gg.new_context(
 		bg_color: gx.rgb(100, 100, 0)
-		width: 540
+		width: 30 * 16 * state.seqs + 60
 		height: 150
 		resizable: false
 		window_title: 'Sequencer'
@@ -50,6 +53,7 @@ fn main() {
 		quit_fn: quit
 		user_data: state
 	)
+	state.board = [][]bool{len: 3, cap: 3, init: []bool{len: state.steps_in_seq * state.seqs, cap: state.steps_in_seq * state.seqs, init: false}}
 	mut d := ma.device()
 	
 	state.hat = ma.sound('/Users/danieldb/Desktop/terca/hat.wav')
@@ -78,11 +82,11 @@ fn frame(mut state AppState){
 				play_drum_sound(2, mut state)
 			}
 		}
-		state.until_next_step = 1000*(60 / state.bpm)/4 - (time.ticks() - state.last_step)
+		state.until_next_step = (60_000 / state.bpm)/(state.steps_in_seq/4) - (time.ticks() - state.last_step)
 		//println(state.until_next_step)
 		// (seconds per beat) - (time)
 		if state.until_next_step <= 0 || state.just_started {
-			state.step = (state.step + 1) % 16
+			state.step = (state.step + 1) % (state.steps_in_seq * state.seqs)
 			if state.just_started { state.step = 0 }
 			state.until_next_step = 60 / state.bpm
 			state.last_step = time.ticks()
@@ -91,7 +95,7 @@ fn frame(mut state AppState){
 		}
 	}
 	
-	start := [30, 30, 30, 30]
+	start := [30, 30, 30 * 16 / state.steps_in_seq, 30]
 	ctx := state.gg
 	mut mouse_in_box := false
 	ctx.begin()
@@ -99,9 +103,14 @@ fn frame(mut state AppState){
 	for iy, row  in state.board {
 		for ix, step in row{
 			ctx.draw_rect_empty(start[0] + ix*start[2], start[1] + iy*start[3], start[2], start[3], gx.rgb(0, 0, 0))
+			for i in 1 .. 4{
+				if math.fmod(ix, math.pow(2, i)) == 0 {
+					ctx.draw_rect_filled(start[0] + ix*start[2], start[1] + iy*start[3], start[2], start[3], gx.rgba(255, 255, 255, 20))
+				}
+			}
 			
 			if state.playing && ix == state.step {
-				ctx.draw_rect_filled(start[0] + ix*start[2], start[1] + iy*start[3], start[2], start[3], gx.rgba(255, 255, 255, 70))
+				ctx.draw_rect_filled(start[0] + ix*start[2], start[1] + iy*start[3], start[2], start[3], gx.rgba(255, 255, 255, 100))
 			}
 
 			if step {
